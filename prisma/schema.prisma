@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Restaurant {
+  id                String   @id @default(uuid())
+  cnpj              String   @unique
+  name              String
+  email             String   @unique
+  password          String
+  phone             String
+  address           String
+  latitude          Float
+  longitude         Float
+  isApproved        Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  averageRating     Float    @default(0)
+  totalRatings      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relações
+  businessHours     BusinessHours[]
+  offers            Offer[]
+  reviews           Review[]
+
+  @@map("restaurants")
+}
+
+model BusinessHours {
+  id            String     @id @default(uuid())
+  restaurantId  String
+  dayOfWeek     Int        // 0=Domingo, 6=Sábado
+  openTime      String     // "08:00"
+  closeTime     String     // "22:00"
+  isOpen        Boolean    @default(true)
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, dayOfWeek])
+  @@map("business_hours")
+}
+
+// =============== CONSUMIDORES ===============
+model Consumer {
+  id                String   @id @default(uuid())
+  name              String
+  email             String   @unique
+  password          String
+  phone             String?
+  isActive          Boolean  @default(true)
+  failedPickups     Int      @default(0)
+  blockedUntil      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relações
+  orders            Order[]
+  reviews           Review[]
+
+  @@map("consumers")
+}
+
+// =============== OFERTAS ===============
+enum OfferStatus {
+  ACTIVE
+  EXPIRED
+  SOLD_OUT
+  CANCELLED
+}
+
+model Offer {
+  id                String      @id @default(uuid())
+  restaurantId      String
+  packageType       String      // "Pacote Surpresa", "Vegetariano", etc
+  description       String?
+  quantity          Int
+  availableQuantity Int
+  originalPrice     Float
+  promotionalPrice  Float
+  discountPercent   Float
+  pickupStartTime   DateTime
+  pickupEndTime     DateTime
+  status            OfferStatus @default(ACTIVE)
+  isVegetarian      Boolean     @default(false)
+  isVegan           Boolean     @default(false)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  restaurant        Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders            Order[]
+
+  @@index([status, pickupEndTime])
+  @@index([restaurantId])
+  @@map("offers")
+}
+
+// =============== PEDIDOS ===============
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REFUSED
+  REFUNDED
+}
+
+model Order {
+  id                String        @id @default(uuid())
+  consumerId        String
+  offerId           String
+  restaurantId      String
+  quantity          Int           @default(1)
+  
+  // Valores
+  originalPrice     Float
+  promotionalPrice  Float
+  totalAmount       Float
+  platformFee       Float         // 15% do valor
+  restaurantAmount  Float         // 85% do valor
+  
+  // Pagamento
+  paymentMethod     PaymentMethod
+  paymentStatus     PaymentStatus @default(PENDING)
+  paymentId         String?       // ID do gateway de pagamento
+  
+  // Retirada
+  pickupCode        String        @unique
+  qrCodeUrl         String?
+  pickupTime        DateTime?
+  
+  status            OrderStatus   @default(PENDING_PAYMENT)
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  consumer          Consumer      @relation(fields: [consumerId], references: [id])
+  offer             Offer         @relation(fields: [offerId], references: [id])
+  review            Review?
+
+  @@index([consumerId])
+  @@index([status])
+  @@index([pickupCode])
+  @@map("orders")
+}
+
+// =============== AVALIAÇÕES ===============
+model Review {
+  id            String     @id @default(uuid())
+  orderId       String     @unique
+  consumerId    String
+  restaurantId  String
+  rating        Int        // 1-5
+  comment       String?
+  createdAt     DateTime   @default(now())
+
+  order         Order      @relation(fields: [orderId], references: [id])
+  consumer      Consumer   @relation(fields: [consumerId], references: [id])
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+  @@map("reviews")
+}
+
+// =============== NOTIFICAÇÕES ===============
+enum NotificationType {
+  ORDER_CONFIRMED
+  PICKUP_REMINDER
+  ORDER_CANCELLED
+  REVIEW_REQUEST
+  NEW_ORDER // Para restaurante
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           // consumerId ou restaurantId
+  userType    String           // "consumer" ou "restaurant"
+  type        NotificationType
+  title       String
+  message     String
+  isRead      Boolean          @default(false)
+  relatedId   String?          // orderId, offerId, etc
+  createdAt   DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// =============== TRANSAÇÕES FINANCEIRAS ===============
+model Transaction {
+  id                String   @id @default(uuid())
+  orderId           String
+  restaurantId      String
+  amount            Float
+  platformFee       Float
+  restaurantAmount  Float
+  status            String   // "pending", "processed", "paid"
+  paymentDate       DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([restaurantId, status])
+  @@map("transactions")
+}

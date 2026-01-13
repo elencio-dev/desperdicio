@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    /* Layout do Projeto */
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    /* Configurações de Ambiente */
+    "target": "ES2023",
+    "module": "nodenext",      // Mantemos CommonJS para maior compatibilidade com Node/Prisma
+    "moduleResolution": "node16",
+    "lib": ["ES2023"],
+    "types": ["node"],
+
+    /* Interoperabilidade e Saída */
+    "esModuleInterop": true,   // Necessário para importar bibliotecas como bcryptjs
+    "sourceMap": true,
+    "declaration": true,
+    "skipLibCheck": true,      // Ignora erros em bibliotecas externas (node_modules)
+    "forceConsistentCasingInFileNames": true,
+
+    /* Strictness (Qualidade do Código) */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    
+    /* Desative estas para evitar o erro ts(1287) */
+    "verbatimModuleSyntax": false, 
+    "isolatedModules": false
+  },
+  "include": ["src/**/*", "prisma/seed.ts"],
+  "exclude": ["node_modules"]
+}
