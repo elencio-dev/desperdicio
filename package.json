@@ -18,7 +18,7 @@
   },
   "name": "food-surplus-backend",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "main": "dist/server.js",
   "dependencies": {
     "@prisma/adapter-pg": "^7.2.0",
