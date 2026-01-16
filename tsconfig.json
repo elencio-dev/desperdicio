@@ -1,22 +1,30 @@
 {
   "compilerOptions": {
+    /* Layout do Projeto */
     "rootDir": "./src",
     "outDir": "./dist",
 
-    "target": "ES2020",
-    "module": "CommonJS",
-    "moduleResolution": "node10",
-
-    "lib": ["ES2020"],
+    /* Configurações de Ambiente */
+    "target": "ES2023",
+    "module": "nodenext",      // Mantemos CommonJS para maior compatibilidade com Node/Prisma
+    "moduleResolution": "node16",
+    "lib": ["ES2023"],
     "types": ["node"],
 
-    "esModuleInterop": true,
+    /* Interoperabilidade e Saída */
+    "esModuleInterop": true,   // Necessário para importar bibliotecas como bcryptjs
     "sourceMap": true,
-    "skipLibCheck": true,
+    "declaration": true,
+    "skipLibCheck": true,      // Ignora erros em bibliotecas externas (node_modules)
     "forceConsistentCasingInFileNames": true,
 
+    /* Strictness (Qualidade do Código) */
     "strict": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    
+    /* Desative estas para evitar o erro ts(1287) */
+    "verbatimModuleSyntax": false, 
+    "isolatedModules": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
