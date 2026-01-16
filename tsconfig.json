@@ -6,8 +6,8 @@
 
     /* Configurações de Ambiente */
     "target": "ES2023",
-    "module": "nodenext",      // Mantemos CommonJS para maior compatibilidade com Node/Prisma
-    "moduleResolution": "node16",
+    "module": "es2022",      // Mantemos CommonJS para maior compatibilidade com Node/Prisma
+    "moduleResolution": "bundler",
     "lib": ["ES2023"],
     "types": ["node"],
 
