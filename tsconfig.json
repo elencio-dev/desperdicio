@@ -26,6 +26,6 @@
     "verbatimModuleSyntax": false, 
     "isolatedModules": false
   },
-  "include": ["src/**/*", "prisma/seed.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }

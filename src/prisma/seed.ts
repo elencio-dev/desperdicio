@@ -1,6 +1,6 @@
 
 import bcrypt from 'bcryptjs';
-import prisma from '../src/utils/prisma';
+import prisma from '../utils/prisma';
 
 async function main() {
   // Limpar dados existentes
