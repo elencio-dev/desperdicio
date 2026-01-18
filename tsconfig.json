@@ -1,31 +1,16 @@
 {
+  "$schema": "https://www.schemastore.org/tsconfig",
+  "display": "Node 22",
+  "_version": "22.0.0",
+
   "compilerOptions": {
-    /* Layout do Projeto */
-    "rootDir": "./src",
-    "outDir": "./dist",
+    "lib": ["es2024", "ESNext.Array", "ESNext.Collection", "ESNext.Iterator"],
+    "module": "nodenext",
+    "target": "es2022",
 
-    /* Configurações de Ambiente */
-    "target": "ES2023",
-    "module": "es2022",      // Mantemos CommonJS para maior compatibilidade com Node/Prisma
-    "moduleResolution": "bundler",
-    "lib": ["ES2023"],
-    "types": ["node"],
-
-    /* Interoperabilidade e Saída */
-    "esModuleInterop": true,   // Necessário para importar bibliotecas como bcryptjs
-    "sourceMap": true,
-    "declaration": true,
-    "skipLibCheck": true,      // Ignora erros em bibliotecas externas (node_modules)
-    "forceConsistentCasingInFileNames": true,
-
-    /* Strictness (Qualidade do Código) */
     "strict": true,
-    "noUncheckedIndexedAccess": true,
-    
-    /* Desative estas para evitar o erro ts(1287) */
-    "verbatimModuleSyntax": false, 
-    "isolatedModules": false
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node16"
+  }
 }
