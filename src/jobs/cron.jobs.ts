@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import prisma from '../utils/prisma';
+import prisma from '../utils/prisma.js';
 
 
 // RN-02: Expirar ofertas automaticamente
@@ -250,7 +250,7 @@ export const unblockUsers = cron.schedule('0 0 * * *', async () => {
 
 export function startAllJobs() {
   console.log('🚀 Iniciando cron jobs...');
-  
+
   expireOffers.start();
   processNoShows.start();
   processPayouts.start();
@@ -266,7 +266,7 @@ export function stopAllJobs() {
   processPayouts.stop();
   sendPickupReminders.stop();
   unblockUsers.stop();
-  
+
   console.log('⏸️  Todos os cron jobs parados');
 }
 

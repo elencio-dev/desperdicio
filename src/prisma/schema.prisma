@@ -157,6 +157,7 @@ model Offer {
   status            OfferStatus @default(ACTIVE)
   isVegetarian      Boolean     @default(false)
   isVegan           Boolean     @default(false)
+  image             String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 

@@ -38,7 +38,7 @@ export const markAsRead = async (req: Request, res: Response, next: NextFunction
     const profileId = restaurant?.id || consumer?.id;
 
     const notification = await prisma.notification.findFirst({
-      where: { id, userId: profileId }
+      where: { id: id as string, userId: profileId }
     });
 
     if (!notification) {
@@ -46,7 +46,7 @@ export const markAsRead = async (req: Request, res: Response, next: NextFunction
     }
 
     const updated = await prisma.notification.update({
-      where: { id },
+      where: { id: id as string },
       data: { isRead: true }
     });
 
@@ -87,7 +87,7 @@ export const deleteNotification = async (req: Request, res: Response, next: Next
     const profileId = restaurant?.id || consumer?.id;
 
     const notification = await prisma.notification.findFirst({
-      where: { id, userId: profileId }
+      where: { id: id as string, userId: profileId }
     });
 
     if (!notification) {
@@ -95,7 +95,7 @@ export const deleteNotification = async (req: Request, res: Response, next: Next
     }
 
     await prisma.notification.delete({
-      where: { id }
+      where: { id: id as string }
     });
 
     res.json({ message: 'Notificação excluída com sucesso' });

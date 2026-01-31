@@ -1,322 +1,258 @@
 
 import bcrypt from 'bcryptjs';
-import prisma from '../utils/prisma';
+import 'dotenv/config';
+import { OfferStatus, OrderStatus, PaymentMethod, PaymentStatus } from '../generated/prisma/index.js';
+import prisma from '../utils/prisma.js';
 
 async function main() {
-  // Limpar dados existentes
-  await prisma.notification.deleteMany();
+  console.log('🌱 Iniciando seed...');
+
+  // 1. Limpar dados existentes (em ordem reversa às dependências)
+  console.log('🧹 Limpando dados existentes...');
   await prisma.transaction.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.review.deleteMany();
   await prisma.order.deleteMany();
   await prisma.offer.deleteMany();
   await prisma.businessHours.deleteMany();
   await prisma.restaurant.deleteMany();
   await prisma.consumer.deleteMany();
+  await prisma.account.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.verification.deleteMany();
+  await prisma.user.deleteMany();
 
-  // ==================== RESTAURANTES ====================
-  
   const hashedPassword = await bcrypt.hash('senha123', 10);
 
-  const restaurant1 = await prisma.restaurant.create({
-    data: {
-      cnpj: '12345678000190',
+  // ==================== RESTAURANTES ====================
+  console.log('🏪 Criando restaurantes...');
+
+  const restaurantData = [
+    {
       name: 'Pizzaria Bella Napoli',
       email: 'contato@bellanapoli.com',
-      password: hashedPassword,
+      cnpj: '12345678000190',
       phone: '85987654321',
       address: 'Rua Barão de Studart, 1234 - Meireles',
       latitude: -3.7327,
       longitude: -38.5270,
-      isApproved: true,
-      averageRating: 4.8,
-      totalRatings: 45,
-      businessHours: {
-        create: [
-          { dayOfWeek: 0, openTime: '18:00', closeTime: '23:00', isOpen: true },
-          { dayOfWeek: 1, openTime: '18:00', closeTime: '23:00', isOpen: true },
-          { dayOfWeek: 2, openTime: '18:00', closeTime: '23:00', isOpen: true },
-          { dayOfWeek: 3, openTime: '18:00', closeTime: '23:00', isOpen: true },
-          { dayOfWeek: 4, openTime: '18:00', closeTime: '23:00', isOpen: true },
-          { dayOfWeek: 5, openTime: '18:00', closeTime: '00:00', isOpen: true },
-          { dayOfWeek: 6, openTime: '12:00', closeTime: '00:00', isOpen: true }
-        ]
-      }
-    }
-  });
-
-  const restaurant2 = await prisma.restaurant.create({
-    data: {
-      cnpj: '98765432000101',
+      image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1000&auto=format&fit=crop',
+    },
+    {
       name: 'Padaria São Francisco',
       email: 'contato@padariasf.com',
-      password: hashedPassword,
+      cnpj: '98765432000101',
       phone: '85987123456',
       address: 'Av. Beira Mar, 567 - Praia de Iracema',
       latitude: -3.7190,
       longitude: -38.5130,
-      isApproved: true,
-      averageRating: 4.6,
-      totalRatings: 89,
-      businessHours: {
-        create: [
-          { dayOfWeek: 0, openTime: '06:00', closeTime: '20:00', isOpen: true },
-          { dayOfWeek: 1, openTime: '06:00', closeTime: '20:00', isOpen: true },
-          { dayOfWeek: 2, openTime: '06:00', closeTime: '20:00', isOpen: true },
-          { dayOfWeek: 3, openTime: '06:00', closeTime: '20:00', isOpen: true },
-          { dayOfWeek: 4, openTime: '06:00', closeTime: '20:00', isOpen: true },
-          { dayOfWeek: 5, openTime: '06:00', closeTime: '21:00', isOpen: true },
-          { dayOfWeek: 6, openTime: '07:00', closeTime: '21:00', isOpen: true }
-        ]
-      }
-    }
-  });
-
-  const restaurant3 = await prisma.restaurant.create({
-    data: {
-      cnpj: '11122233000144',
-      name: 'Restaurante Vegetariano Green Life',
+      image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop',
+    },
+    {
+      name: 'Green Life Veggie',
       email: 'contato@greenlife.com',
-      password: hashedPassword,
+      cnpj: '11122233000144',
       phone: '85988776655',
       address: 'Rua Desembargador Moreira, 789 - Aldeota',
       latitude: -3.7380,
       longitude: -38.5000,
-      isApproved: true,
-      averageRating: 4.9,
-      totalRatings: 67,
-      businessHours: {
-        create: [
-          { dayOfWeek: 0, openTime: '11:00', closeTime: '15:00', isOpen: true },
-          { dayOfWeek: 1, openTime: '11:00', closeTime: '15:00', isOpen: true },
-          { dayOfWeek: 2, openTime: '11:00', closeTime: '15:00', isOpen: true },
-          { dayOfWeek: 3, openTime: '11:00', closeTime: '15:00', isOpen: true },
-          { dayOfWeek: 4, openTime: '11:00', closeTime: '15:00', isOpen: true },
-          { dayOfWeek: 5, openTime: '11:00', closeTime: '15:00', isOpen: true },
-          { dayOfWeek: 6, openTime: '12:00', closeTime: '16:00', isOpen: true }
-        ]
-      }
-    }
-  });
+      image: 'https://images.unsplash.com/photo-1543332164-6e82f355badc?q=80&w=1000&auto=format&fit=crop',
+    },
+  ];
 
-  console.log('✅ 3 restaurantes criados');
+  const createdRestaurants = [];
+
+  for (const data of restaurantData) {
+    // Criar Usuário
+    const user = await prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        role: 'RESTAURANT',
+        image: data.image,
+        emailVerified: true,
+      },
+    });
+
+    // Criar Conta (Better Auth)
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        accountId: user.id,
+        providerId: 'credential',
+        password: hashedPassword,
+      },
+    });
+
+    // Criar Perfil de Restaurante
+    const restaurant = await prisma.restaurant.create({
+      data: {
+        userId: user.id,
+        cnpj: data.cnpj,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        isApproved: true,
+        averageRating: 4.5 + Math.random() * 0.5,
+        totalRatings: Math.floor(Math.random() * 100),
+        businessHours: {
+          create: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+            dayOfWeek: day,
+            openTime: '08:00',
+            closeTime: '22:00',
+            isOpen: true,
+          })),
+        },
+      },
+    });
+    createdRestaurants.push(restaurant);
+  }
 
   // ==================== CONSUMIDORES ====================
+  console.log('👤 Criando consumidores...');
 
-  const consumer1 = await prisma.consumer.create({
-    data: {
-      name: 'Maria Silva',
-      email: 'maria@email.com',
-      password: hashedPassword,
-      phone: '85999888777'
-    }
-  });
+  const consumerData = [
+    { name: 'Maria Silva', email: 'maria@email.com' },
+    { name: 'João Santos', email: 'joao@email.com' },
+  ];
 
-  const consumer2 = await prisma.consumer.create({
-    data: {
-      name: 'João Santos',
-      email: 'joao@email.com',
-      password: hashedPassword,
-      phone: '85988777666'
-    }
-  });
+  const createdConsumers = [];
 
-  console.log('✅ 2 consumidores criados');
+  for (const data of consumerData) {
+    const user = await prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        role: 'CONSUMER',
+        emailVerified: true,
+      },
+    });
 
-  // ==================== OFERTAS ATIVAS ====================
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        accountId: user.id,
+        providerId: 'credential',
+        password: hashedPassword,
+      },
+    });
+
+    const consumer = await prisma.consumer.create({
+      data: {
+        userId: user.id,
+        name: data.name,
+        email: data.email,
+      },
+    });
+    createdConsumers.push(consumer);
+  }
+
+  // ==================== OFERTAS (PRODUTOS) ====================
+  console.log('🍱 Criando ofertas...');
 
   const now = new Date();
-  const in2Hours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-  const in3Hours = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  const validUntil = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 horas a partir de agora
 
-  const offer1 = await prisma.offer.create({
-    data: {
-      restaurantId: restaurant1.id,
-      packageType: 'Pacote Surpresa de Pizzas',
-      description: 'Mix de fatias de pizzas variadas do dia',
+  const offers = [
+    {
+      restaurantId: createdRestaurants[0].id,
+      packageType: 'Pacote Surpresa Grande',
+      description: 'Uma seleção de nossas melhores pizzas do dia.',
       quantity: 10,
-      availableQuantity: 7,
-      originalPrice: 45.00,
-      promotionalPrice: 22.50,
-      discountPercent: 50,
-      pickupStartTime: in2Hours,
-      pickupEndTime: new Date(in2Hours.getTime() + 2 * 60 * 60 * 1000),
-      status: 'ACTIVE',
+      availableQuantity: 8,
+      originalPrice: 60.0,
+      promotionalPrice: 24.9,
+      discountPercent: 58.5,
       isVegetarian: false,
-      isVegan: false
-    }
-  });
-
-  const offer2 = await prisma.offer.create({
-    data: {
-      restaurantId: restaurant2.id,
-      packageType: 'Pacote de Pães e Doces',
-      description: 'Pães franceses, doces e salgados frescos',
+      image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1000&auto=format&fit=crop',
+    },
+    {
+      restaurantId: createdRestaurants[1].id,
+      packageType: 'Kit Café da Manhã',
+      description: 'Pães artesanais, croissants e frios.',
       quantity: 15,
       availableQuantity: 15,
-      originalPrice: 30.00,
-      promotionalPrice: 15.00,
-      discountPercent: 50,
-      pickupStartTime: in2Hours,
-      pickupEndTime: new Date(in2Hours.getTime() + 2 * 60 * 60 * 1000),
-      status: 'ACTIVE',
+      originalPrice: 40.0,
+      promotionalPrice: 15.0,
+      discountPercent: 62.5,
       isVegetarian: true,
-      isVegan: false
-    }
-  });
-
-  const offer3 = await prisma.offer.create({
-    data: {
-      restaurantId: restaurant3.id,
-      packageType: 'Pacote Vegano Completo',
-      description: 'Refeição completa: salada, prato principal e sobremesa',
-      quantity: 8,
-      availableQuantity: 5,
-      originalPrice: 40.00,
-      promotionalPrice: 20.00,
-      discountPercent: 50,
-      pickupStartTime: in2Hours,
-      pickupEndTime: new Date(in2Hours.getTime() + 2 * 60 * 60 * 1000),
-      status: 'ACTIVE',
+      image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop',
+    },
+    {
+      restaurantId: createdRestaurants[2].id,
+      packageType: 'Bowl Super Nutritivo',
+      description: 'Mix de grãos, legumes frescos e proteína vegetal.',
+      quantity: 5,
+      availableQuantity: 3,
+      originalPrice: 35.0,
+      promotionalPrice: 17.5,
+      discountPercent: 50.0,
       isVegetarian: true,
-      isVegan: true
-    }
-  });
+      isVegan: true,
+      image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=1000&auto=format&fit=crop',
+    },
+  ];
 
-  console.log('✅ 3 ofertas ativas criadas');
+  const createdOffers = [];
+  for (const offerData of offers) {
+    const offer = await prisma.offer.create({
+      data: {
+        ...offerData,
+        pickupStartTime: now,
+        pickupEndTime: validUntil,
+        status: OfferStatus.ACTIVE,
+      },
+    });
+    createdOffers.push(offer);
+  }
 
-  // ==================== PEDIDOS EXEMPLO ====================
+  // ==================== PEDIDOS E AVALIAÇÕES ====================
+  console.log('🧾 Criando pedidos de exemplo...');
 
-  const order1 = await prisma.order.create({
+  const order = await prisma.order.create({
     data: {
-      consumerId: consumer1.id,
-      offerId: offer1.id,
-      restaurantId: restaurant1.id,
-      quantity: 2,
-      originalPrice: 90.00,
-      promotionalPrice: 22.50,
-      totalAmount: 45.00,
-      platformFee: 6.75,
-      restaurantAmount: 38.25,
-      paymentMethod: 'PIX',
-      paymentStatus: 'APPROVED',
-      paymentId: 'PAY_123456789',
-      pickupCode: 'ABC123XYZ0',
-      qrCodeUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      status: 'CONFIRMED'
-    }
-  });
-
-  const order2 = await prisma.order.create({
-    data: {
-      consumerId: consumer2.id,
-      offerId: offer3.id,
-      restaurantId: restaurant3.id,
+      consumerId: createdConsumers[0].id,
+      offerId: createdOffers[0].id,
+      restaurantId: createdRestaurants[0].id,
       quantity: 1,
-      originalPrice: 40.00,
-      promotionalPrice: 20.00,
-      totalAmount: 20.00,
-      platformFee: 3.00,
-      restaurantAmount: 17.00,
-      paymentMethod: 'CREDIT_CARD',
-      paymentStatus: 'APPROVED',
-      paymentId: 'PAY_987654321',
-      pickupCode: 'XYZ789ABC1',
-      qrCodeUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      status: 'COMPLETED',
-      pickupTime: new Date()
-    }
+      originalPrice: 60.0,
+      promotionalPrice: 24.9,
+      totalAmount: 24.9,
+      platformFee: 24.9 * 0.15,
+      restaurantAmount: 24.9 * 0.85,
+      paymentMethod: PaymentMethod.PIX,
+      paymentStatus: PaymentStatus.APPROVED,
+      status: OrderStatus.COMPLETED,
+      pickupCode: 'BELLA-777',
+      pickupTime: new Date(),
+    },
   });
-
-  console.log('✅ 2 pedidos criados');
-
-  // ==================== AVALIAÇÕES ====================
 
   await prisma.review.create({
     data: {
-      orderId: order2.id,
-      consumerId: consumer2.id,
-      restaurantId: restaurant3.id,
+      orderId: order.id,
+      consumerId: createdConsumers[0].id,
+      restaurantId: createdRestaurants[0].id,
       rating: 5,
-      comment: 'Comida excelente! Muito fresca e saborosa. Super recomendo!'
-    }
+      comment: 'Pizza maravilhosa, nem parecia excedente!',
+    },
   });
 
-  console.log('✅ 1 avaliação criada');
-
-  // ==================== NOTIFICAÇÕES ====================
-
-  await prisma.notification.create({
-    data: {
-      userId: consumer1.id,
-      userType: 'consumer',
-      type: 'ORDER_CONFIRMED',
-      title: 'Pedido Confirmado! 🎉',
-      message: `Seu pedido na Pizzaria Bella Napoli foi confirmado. Código: ABC123XYZ0`,
-      relatedId: order1.id,
-      isRead: false
-    }
-  });
-
-  await prisma.notification.create({
-    data: {
-      userId: restaurant1.id,
-      userType: 'restaurant',
-      type: 'NEW_ORDER',
-      title: 'Novo Pedido Recebido',
-      message: `Você tem um novo pedido. Código: ABC123XYZ0`,
-      relatedId: order1.id,
-      isRead: false
-    }
-  });
-
-  console.log('✅ 2 notificações criadas');
-
-  // ==================== TRANSAÇÕES ====================
-
-  await prisma.transaction.create({
-    data: {
-      orderId: order1.id,
-      restaurantId: restaurant1.id,
-      amount: 45.00,
-      platformFee: 6.75,
-      restaurantAmount: 38.25,
-      status: 'pending'
-    }
-  });
-
-  await prisma.transaction.create({
-    data: {
-      orderId: order2.id,
-      restaurantId: restaurant3.id,
-      amount: 20.00,
-      platformFee: 3.00,
-      restaurantAmount: 17.00,
-      status: 'paid',
-      paymentDate: new Date()
-    }
-  });
-
-  console.log('✅ 2 transações criadas');
-
-  console.log('');
-  console.log('🎉 Seed concluído com sucesso!');
-  console.log('');
-  console.log('📝 Credenciais de acesso:');
-  console.log('');
-  console.log('🍕 RESTAURANTES:');
-  console.log('Email: contato@bellanapoli.com | Senha: senha123');
-  console.log('Email: contato@padariasf.com | Senha: senha123');
-  console.log('Email: contato@greenlife.com | Senha: senha123');
-  console.log('');
-  console.log('👤 CONSUMIDORES:');
-  console.log('Email: maria@email.com | Senha: senha123');
-  console.log('Email: joao@email.com | Senha: senha123');
-  console.log('');
+  console.log('✨ Seed finalizado com sucesso!');
+  console.log('\nCredenciais de Teste:');
+  console.log('-------------------');
+  console.log('🍕 Restaurantes:');
+  restaurantData.forEach(r => console.log(`  - ${r.email} / senha123`));
+  console.log('\n👤 Consumidores:');
+  consumerData.forEach(c => console.log(`  - ${c.email} / senha123`));
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Erro no seed:', e);
+    console.error('❌ Erro durante o seed:', e);
     process.exit(1);
   })
   .finally(async () => {
