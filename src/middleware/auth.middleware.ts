@@ -1,49 +1,29 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { NextFunction, Request, Response } from 'express';
+import { auth } from '../utils/auth.js';
 
-interface JwtPayload {
-  id: string;
-  type: 'restaurant' | 'consumer';
-}
-
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
+    const session = await auth.api.getSession({
+      headers: req.headers
+    });
 
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Token não fornecido' });
+    if (!session) {
+      return res.status(401).json({ error: 'Sessão inválida ou não encontrada' });
     }
 
-    const [scheme, token] = authHeader.split(' ');
-
-    if (scheme !== 'Bearer') {
-      return res.status(401).json({ error: 'Formato de token inválido' });
-    }
-
-    if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as JwtPayload;
-
-    (req as any).user = decoded;
+    (req as any).user = session.user;
+    (req as any).session = session.session;
 
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({ error: 'Token inválido' });
-    }
-    if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ error: 'Token expirado' });
-    }
-    return res.status(500).json({ error: 'Erro ao validar token' });
+    return res.status(500).json({ error: 'Erro ao validar sessão' });
   }
 };
 
 export const isRestaurant = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
 
-  if (!user || user.type !== 'restaurant') {
+  if (!user || user.role !== 'RESTAURANT') {
     return res.status(403).json({ error: 'Acesso restrito a restaurantes' });
   }
 
@@ -53,8 +33,18 @@ export const isRestaurant = (req: Request, res: Response, next: NextFunction) =>
 export const isConsumer = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
 
-  if (!user || user.type !== 'consumer') {
+  if (!user || user.role !== 'CONSUMER') {
     return res.status(403).json({ error: 'Acesso restrito a consumidores' });
+  }
+
+  next();
+};
+
+export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const user = (req as any).user;
+
+  if (!user || user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Acesso restrito a administradores' });
   }
 
   next();

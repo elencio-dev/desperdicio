@@ -1,28 +1,36 @@
-import express from 'express';
 import cors from 'cors';
+import "dotenv/config";
+import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
+
+
 
 // Routes
-import restaurantRoutes from './routes/restaurant.routes';
-import consumerRoutes from './routes/consumer.routes';
-import offerRoutes from './routes/offer.routes';
-import orderRoutes from './routes/order.routes';
-import reviewRoutes from './routes/review.routes';
-import notificationRoutes from './routes/notification.routes';
-import webhookRoutes from './routes/webhook.routes';
+import adminRoutes from './routes/admin.routes.js';
+import consumerRoutes from './routes/consumer.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import offerRoutes from './routes/offer.routes.js';
+import orderRoutes from './routes/order.routes.js';
+import restaurantRoutes from './routes/restaurant.routes.js';
+import reviewRoutes from './routes/review.routes.js';
+import webhookRoutes from './routes/webhook.routes.js';
+
+
+// Auth
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./utils/auth.js";
 
 
 //Swagger
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './swagger.config';
+import { swaggerSpec } from './swagger.config.js';
 
 // Middleware
-import { errorHandler } from './middleware/error.middleware';
-import { notFound } from './middleware/notFound.middleware';
+import { errorHandler } from './middleware/error.middleware.js';
+import { notFound } from './middleware/notFound.middleware.js';
 
-dotenv.config();
+// Middleware
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,6 +59,17 @@ app.get('/api-docs.json', (req, res) => {
   res.send(swaggerSpec);
 });
 
+// Middleware para Mobile/Expo (Injeta Origin se estiver faltando)
+app.use((req, res, next) => {
+    if (!req.headers.origin) {
+        req.headers.origin = process.env.API_URL || "http://localhost:3000";
+    }
+    next();
+});
+
+// Auth Route (Better Auth)
+app.use("/api/auth", toNodeHandler(auth));
+
 // Routes
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/consumers', consumerRoutes);
@@ -59,6 +78,9 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/admin', adminRoutes);
+
+
 // Error handling
 app.use(notFound);
 app.use(errorHandler);
@@ -66,6 +88,8 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+
 });
 
 export default app;
