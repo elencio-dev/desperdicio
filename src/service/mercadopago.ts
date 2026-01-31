@@ -65,7 +65,17 @@ export async function createPixPayment(params: CreatePixPaymentParams) {
 
 // ==================== CONSULTAR PAGAMENTO ====================
 
-export async function getPaymentStatus(paymentId: string | number) {
+interface PaymentStatusResponse {
+    success: boolean;
+    status: string;
+    statusDetail?: string;
+    amount?: number;
+    approved: boolean;
+    metadata?: any;
+    error?: string;
+}
+
+export async function getPaymentStatus(paymentId: string | number): Promise<PaymentStatusResponse> {
     try {
         const id = paymentId.toString();
         const paymentData = await payment.get({ id });
@@ -79,7 +89,7 @@ export async function getPaymentStatus(paymentId: string | number) {
             metadata: paymentData.metadata
         };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false, status: 'error', approved: false, error: error.message };
     }
 }
 
@@ -187,14 +197,19 @@ export async function processWebhook(data: any) {
       if (paymentInfo.success && paymentInfo.metadata) {
         const orderId = paymentInfo.metadata.order_id;
 
+        if (!orderId) {
+          console.warn(`⚠️ Webhook ${paymentId} recebido sem order_id no metadata`);
+          return { success: true };
+        }
+
         if (paymentInfo.approved) {
           console.log(`✅ Pagamento aprovado: ${paymentId} para pedido ${orderId}`);
-          await orderService.processPaymentApproval(orderId, paymentId.toString());
-        } else if (['rejected', 'cancelled', 'refunded'].includes(paymentInfo.status)) {
+          await orderService.processPaymentApproval(orderId as string, paymentId.toString());
+        } else if (paymentInfo.status && ['rejected', 'cancelled', 'refunded'].includes(paymentInfo.status)) {
           console.log(`ℹ️ Pagamento ${paymentId} status: ${paymentInfo.status}`);
 
           await prisma.order.update({
-            where: { id: orderId },
+            where: { id: orderId as string },
             data: {
               paymentStatus: paymentInfo.status === 'refunded' ? 'REFUNDED' : 'REFUSED',
               status: paymentInfo.status === 'refunded' ? 'CANCELLED' : 'PENDING_PAYMENT',
