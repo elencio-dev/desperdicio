@@ -41,7 +41,49 @@ const router = Router();
 router.post('/register', consumerController.register);
 
 // Protegidas
+/**
+ * @swagger
+ * /api/consumers/profile:
+ *   get:
+ *     tags: [Consumers]
+ *     summary: Obter perfil do consumidor
+ *     security:
+ *       - betterAuth: []
+ *     responses:
+ *       200:
+ *         description: Perfil do consumidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Consumer'
+ */
 router.get('/profile', authenticate, isConsumer, consumerController.getProfile);
+/**
+ * @swagger
+ * /api/consumers/profile:
+ *   put:
+ *     tags: [Consumers]
+ *     summary: Atualizar perfil do consumidor
+ *     security:
+ *       - betterAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Perfil atualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Consumer'
+ */
 router.put('/profile', authenticate, isConsumer, consumerController.updateProfile);
 
 export default router;

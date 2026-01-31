@@ -80,23 +80,45 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+// Esquema de atualização
+const updateProfileSchema = z.object({
+  name: z.string().min(3).optional(),
+  phone: z.string().optional()
+});
+
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = (req as any).user;
-    const { name, phone } = req.body;
+    const data = updateProfileSchema.parse(req.body);
 
-    const updateData: any = {};
-    if (name) updateData.name = name;
-    if (phone) updateData.phone = phone;
+    const result = await prisma.$transaction(async (tx) => {
+        // 1. Atualizar Consumer
+        const updateData: any = {};
+        if (data.name) updateData.name = data.name;
+        if (data.phone) updateData.phone = data.phone;
 
-    const consumer = await prisma.consumer.update({
-      where: { userId: user.id },
-      data: updateData
+        const consumer = await tx.consumer.update({
+            where: { userId: user.id },
+            data: updateData
+        });
+
+        // 2. Atualizar User se nome mudou
+        if (data.name) {
+            await tx.user.update({
+                where: { id: user.id },
+                data: { name: data.name }
+            });
+        }
+
+        return consumer;
     });
 
-    res.json(consumer);
+    res.json(result);
 
   } catch (error) {
+      if (error instanceof z.ZodError) {
+          return res.status(400).json({ errors: error });
+      }
     next(error);
   }
 };

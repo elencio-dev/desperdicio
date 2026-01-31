@@ -41,8 +41,87 @@ const router = Router();
 router.post('/register', restaurantController.register);
 
 // Protegidas
+/**
+ * @swagger
+ * /api/restaurants/profile:
+ *   get:
+ *     tags: [Restaurants]
+ *     summary: Obter perfil do restaurante
+ *     security:
+ *       - betterAuth: []
+ *     responses:
+ *       200:
+ *         description: Perfil do restaurante
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Restaurant'
+ */
 router.get('/profile', authenticate, isRestaurant, restaurantController.getProfile);
+/**
+ * @swagger
+ * /api/restaurants/profile:
+ *   put:
+ *     tags: [Restaurants]
+ *     summary: Atualizar perfil do restaurante
+ *     security:
+ *       - betterAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               latitude:
+ *                 type: number
+ *               longitude:
+ *                 type: number
+ *               businessHours:
+ *                 type: array
+ *                 items:
+ *                   $ref: '#/components/schemas/RestaurantRegister/properties/businessHours/items'
+ *     responses:
+ *       200:
+ *         description: Perfil atualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Restaurant'
+ */
 router.put('/profile', authenticate, isRestaurant, restaurantController.updateProfile);
+/**
+ * @swagger
+ * /api/restaurants/sales:
+ *   get:
+ *     tags: [Restaurants]
+ *     summary: Histórico de vendas
+ *     security:
+ *       - betterAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Histórico detalhado e resumido
+ */
 router.get('/sales', authenticate, isRestaurant, restaurantController.getSalesHistory);
 
 export default router;

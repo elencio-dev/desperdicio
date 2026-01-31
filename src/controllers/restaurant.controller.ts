@@ -116,42 +116,75 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+// Esquema de atualização
+const updateProfileSchema = z.object({
+  name: z.string().min(3).optional(),
+  phone: z.string().min(10).optional(),
+  address: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  businessHours: z.array(z.object({
+    dayOfWeek: z.number().min(0).max(6),
+    openTime: z.string(),
+    closeTime: z.string(),
+    isOpen: z.boolean()
+  })).optional()
+});
+
 // Atualizar perfil
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = (req as any).user;
-    const { name, phone, address, latitude, longitude, businessHours } = req.body;
+    const data = updateProfileSchema.parse(req.body);
 
-    const updateData: any = {};
-    if (name) updateData.name = name;
-    if (phone) updateData.phone = phone;
-    if (address) updateData.address = address;
-    if (latitude) updateData.latitude = latitude;
-    if (longitude) updateData.longitude = longitude;
+    const result = await prisma.$transaction(async (tx) => {
+        // 1. Atualizar dados do Restaurante
+        const updateData: any = {};
+        if (data.name) updateData.name = data.name;
+        if (data.phone) updateData.phone = data.phone;
+        if (data.address) updateData.address = data.address;
+        if (data.latitude !== undefined) updateData.latitude = data.latitude;
+        if (data.longitude !== undefined) updateData.longitude = data.longitude;
 
-    const restaurant = await prisma.restaurant.update({
-      where: { userId: user.id },
-      data: updateData,
-      include: { businessHours: true }
+        const restaurant = await tx.restaurant.update({
+            where: { userId: user.id },
+            data: updateData
+        });
+
+        // 2. Atualizar nome no User (se mudou)
+        if (data.name) {
+            await tx.user.update({
+                where: { id: user.id },
+                data: { name: data.name }
+            });
+        }
+
+        // 3. Atualizar horários (se fornecido)
+        if (data.businessHours) {
+            await tx.businessHours.deleteMany({
+                where: { restaurantId: restaurant.id }
+            });
+
+            await tx.businessHours.createMany({
+                data: data.businessHours.map((bh) => ({
+                    ...bh,
+                    restaurantId: restaurant.id
+                }))
+            });
+        }
+
+        return tx.restaurant.findUnique({
+             where: { id: restaurant.id },
+             include: { businessHours: true }
+        });
     });
 
-    // Atualiza horários se fornecido
-    if (businessHours && Array.isArray(businessHours)) {
-      await prisma.businessHours.deleteMany({
-        where: { restaurantId: restaurant.id }
-      });
-
-      await prisma.businessHours.createMany({
-        data: businessHours.map((bh: any) => ({
-          ...bh,
-          restaurantId: restaurant.id
-        }))
-      });
-    }
-
-    res.json(restaurant);
+    res.json(result);
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+        return res.status(400).json({ errors: error });
+    }
     next(error);
   }
 };
