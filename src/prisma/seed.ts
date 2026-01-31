@@ -1,7 +1,7 @@
 
+import { OfferStatus, OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
-import { OfferStatus, OrderStatus, PaymentMethod, PaymentStatus } from '../generated/prisma/index.js';
 import prisma from '../utils/prisma.js';
 
 async function main() {
