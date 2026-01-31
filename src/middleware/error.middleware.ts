@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express'
+import { NextFunction, Request, Response } from 'express';
 
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Error:', err);
@@ -25,8 +25,15 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     });
   }
 
-  // Default error
-  res.status(err.status || 500).json({
+  // Handle Better Auth errors or other string status codes
+  let statusCode = 500;
+  if (typeof err.status === 'number') {
+    statusCode = err.status;
+  } else if (err.status === 'BAD_REQUEST') {
+    statusCode = 400;
+  }
+
+  res.status(statusCode).json({
     error: err.message || 'Erro interno do servidor'
   });
 };
