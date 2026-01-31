@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { nanoid } from 'nanoid';
 import QRCode from 'qrcode';
 import { z } from 'zod';
-import orderService from '../service/order.service.js';
+import mercadoPagoService from '../service/mercadopago.js';
 import prisma from '../utils/prisma.js';
 
 
@@ -97,7 +97,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           paymentMethod: data.paymentMethod,
           paymentStatus: 'PENDING',
           pickupCode,
-          qrCodeUrl,
+          qrCodeUrl: data.paymentMethod === 'PIX' ? 'pending' : null, // QR Code final virá do MP
           status: 'PENDING_PAYMENT'
         },
         include: {
@@ -111,6 +111,11 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
                   phone: true
                 }
               }
+            }
+          },
+          consumer: {
+            include: {
+              user: true
             }
           }
         }
@@ -141,19 +146,63 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return newOrder;
     });
 
-    // Simular aprovação automática para PIX (Apenas DEV)
-    if (data.paymentMethod === 'PIX' && process.env.NODE_ENV !== 'production') {
-      setTimeout(async () => {
-        await orderService.processPaymentApproval(order.id);
-      }, 5000);
+    // INTEGRAÇÃO REAL COM MERCADO PAGO
+    let paymentResponse;
+
+    if (data.paymentMethod === 'PIX') {
+      paymentResponse = await mercadoPagoService.createPixPayment({
+        orderId: order.id,
+        amount: order.totalAmount,
+        email: (order.consumer as any).user.email,
+        name: (order.consumer as any).name,
+        description: `Pedido ${order.pickupCode} - ${order.offer.packageType}`
+      });
+
+      if (paymentResponse.success) {
+        // Atualizar pedido com ID do pagamento e QR Code real
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            paymentId: paymentResponse.paymentId?.toString(),
+            qrCodeUrl: paymentResponse.qrCodeBase64
+          }
+        });
+      }
+    } else {
+      // CREDIT_CARD -> Gerar Preference para Checkout Pro
+      paymentResponse = await mercadoPagoService.createCheckoutPreference(
+        order.id,
+        [{
+          title: order.offer.packageType,
+          quantity: order.quantity,
+          unit_price: order.promotionalPrice
+        }],
+        {
+          email: (order.consumer as any).user.email,
+          name: (order.consumer as any).name
+        }
+      );
     }
 
+    if (!paymentResponse.success) {
+      console.error('❌ Erro no Mercado Pago:', paymentResponse.error);
+      return res.status(500).json({
+        error: 'Erro ao gerar pagamento',
+        details: paymentResponse.error
+      });
+    }
 
     res.status(201).json({
-      order,
+      order: {
+        ...order,
+        qrCode: (paymentResponse as any).qrCode,
+        qrCodeBase64: (paymentResponse as any).qrCodeBase64,
+        ticketUrl: (paymentResponse as any).ticketUrl,
+        checkoutUrl: (paymentResponse as any).initPoint
+      },
       message: data.paymentMethod === 'PIX'
-        ? 'Pedido criado. Aguardando confirmação do pagamento PIX.'
-        : 'Pedido criado. Processando pagamento com cartão.'
+        ? 'Pedido criado. Use o QR Code para pagar.'
+        : 'Pedido criado. Redirecionando para pagamento.'
     });
 
   } catch (error) {

@@ -286,3 +286,16 @@ model Transaction {
   @@index([restaurantId, status])
   @@map("transactions")
 }
+
+// =============== IDEMPOTÊNCIA DE WEBHOOKS ===============
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  externalId  String   @unique // ID da notificação ou do pagamento no gateway
+  source      String // "MERCADOPAGO", "STRIPE", etc
+  type        String // "payment.created", "payment.updated", etc
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@index([externalId])
+  @@map("webhook_events")
+}

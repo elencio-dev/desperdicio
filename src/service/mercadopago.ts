@@ -1,4 +1,5 @@
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
+import prisma from '../utils/prisma.js';
 import orderService from './order.service.js';
 
 
@@ -147,28 +148,66 @@ export async function createCheckoutPreference(orderId: string, items: any[], pa
 
 export async function processWebhook(data: any) {
   try {
-    const { type, data: webhookData } = data;
+    const { type, action, data: webhookData } = data;
 
-    if (type === 'payment') {
-      const paymentId = webhookData.id;
+    // 1. Idempotência: Verificar se já processamos este evento
+    const externalId = webhookData?.id?.toString() || data.id?.toString();
+    if (!externalId) {
+      console.warn('⚠️ Webhook sem externalId:', JSON.stringify(data));
+      return { success: true }; // Ignorar mas não dar erro
+    }
+
+    const eventType = type || action || 'unknown';
+
+    // Buscar se já existe esse evento processado
+    const existingEvent = await prisma.webhookEvent.findUnique({
+      where: { externalId }
+    });
+
+    if (existingEvent) {
+      console.log(`ℹ️ Webhook ${externalId} já foi processado anteriormente.`);
+      return { success: true };
+    }
+
+    // 2. Registrar o evento (Idempotência)
+    await prisma.webhookEvent.create({
+      data: {
+        externalId,
+        source: 'MERCADOPAGO',
+        type: eventType,
+        payload: data
+      }
+    });
+
+    // 3. Processar apenas eventos de pagamento
+    if (type === 'payment' || action === 'payment.created' || action === 'payment.updated') {
+      const paymentId = externalId;
       const paymentInfo = await getPaymentStatus(paymentId);
 
       if (paymentInfo.success && paymentInfo.metadata) {
         const orderId = paymentInfo.metadata.order_id;
 
         if (paymentInfo.approved) {
-           await orderService.processPaymentApproval(orderId, paymentId.toString());
-        } else if (paymentInfo.status === 'rejected' || paymentInfo.status === 'cancelled') {
-            // Lógica para marcar como falha se necessário
-            console.log(`Pagamento ${paymentId} para pedido ${orderId} falhou: ${paymentInfo.status}`);
+          console.log(`✅ Pagamento aprovado: ${paymentId} para pedido ${orderId}`);
+          await orderService.processPaymentApproval(orderId, paymentId.toString());
+        } else if (['rejected', 'cancelled', 'refunded'].includes(paymentInfo.status)) {
+          console.log(`ℹ️ Pagamento ${paymentId} status: ${paymentInfo.status}`);
+
+          await prisma.order.update({
+            where: { id: orderId },
+            data: {
+              paymentStatus: paymentInfo.status === 'refunded' ? 'REFUNDED' : 'REFUSED',
+              status: paymentInfo.status === 'refunded' ? 'CANCELLED' : 'PENDING_PAYMENT',
+              updatedAt: new Date()
+            }
+          });
         }
       }
-
     }
 
     return { success: true };
   } catch (error: any) {
-    console.error('Erro ao processar webhook no serviço:', error);
+    console.error('❌ Erro ao processar webhook no serviço:', error);
     return { success: false, error: error.message };
   }
 }

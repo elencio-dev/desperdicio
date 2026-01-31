@@ -27,8 +27,12 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger.config.js';
 
 // Middleware
+import { setupCronJobs } from './jobs/cron.jobs.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFound } from './middleware/notFound.middleware.js';
+
+// Inicializar Jobs
+setupCronJobs();
 
 // Middleware
 
