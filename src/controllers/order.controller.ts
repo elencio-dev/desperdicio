@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { nanoid } from 'nanoid';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 import { z } from 'zod';
 import mercadoPagoService from '../service/mercadopago.js';
 import prisma from '../utils/prisma.js';
@@ -11,7 +11,7 @@ import prisma from '../utils/prisma.js';
 const createOrderSchema = z.object({
   offerId: z.string().uuid(),
   quantity: z.number().min(1).default(1),
-  paymentMethod: z.enum(['PIX', 'CREDIT_CARD'])
+  paymentMethod: z.enum(['PIX', 'CREDIT_CARD', 'DEBIT_CARD'])
 });
 
 // RF-04: Criar pedido (compra)
@@ -71,7 +71,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     // Calcular valores (RN-08)
     const totalAmount = offer.promotionalPrice * data.quantity;
-    const platformFee = totalAmount * 0.15;
+    const platformFee = totalAmount * 0.10;
     const restaurantAmount = totalAmount - platformFee;
 
     // Gerar código de retirada (RF-07)
@@ -169,7 +169,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         });
       }
     } else {
-      // CREDIT_CARD -> Gerar Preference para Checkout Pro
+      // CREDIT_CARD ou DEBIT_CARD -> Gerar Preference para Checkout Pro
       paymentResponse = await mercadoPagoService.createCheckoutPreference(
         order.id,
         [{

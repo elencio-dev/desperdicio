@@ -181,6 +181,7 @@ enum OrderStatus {
 enum PaymentMethod {
   PIX
   CREDIT_CARD
+  DEBIT_CARD
 }
 
 enum PaymentStatus {
@@ -201,8 +202,8 @@ model Order {
   originalPrice    Float
   promotionalPrice Float
   totalAmount      Float
-  platformFee      Float // 15% do valor
-  restaurantAmount Float // 85% do valor
+  platformFee      Float // 10% do valor
+  restaurantAmount Float // 90% do valor
 
   // Pagamento
   paymentMethod PaymentMethod
