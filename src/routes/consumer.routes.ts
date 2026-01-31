@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import consumerController from '../controllers/consumer.controller';
-import { authenticate, isConsumer } from '../middleware/auth.middleware';
+import consumerController from '../controllers/consumer.controller.js';
+import { authenticate, isConsumer } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
 // Públicas
 router.post('/register', consumerController.register);
-router.post('/login', consumerController.login);
 
 // Protegidas
 router.get('/profile', authenticate, isConsumer, consumerController.getProfile);

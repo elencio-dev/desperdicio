@@ -1,8 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
-import prisma from '../utils/prisma';
+import { auth } from '../utils/auth.js';
+import prisma from '../utils/prisma.js';
 
 
 // Validação Zod
@@ -23,63 +22,60 @@ const registerSchema = z.object({
   }))
 });
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string()
-});
-
 // RF-01: Cadastro de Restaurante
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = registerSchema.parse(req.body);
 
-    // Verifica se CNPJ já existe
-    const existingRestaurant = await prisma.restaurant.findFirst({
-      where: {
-        OR: [
-          { cnpj: data.cnpj },
-          { email: data.email }
-        ]
+    // 1. Better Auth: Criar Usuário
+    const result = await auth.api.signUpEmail({
+      body: {
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        role: 'RESTAURANT'
       }
     });
 
-    if (existingRestaurant) {
-      return res.status(400).json({
-        error: 'CNPJ ou e-mail já cadastrado'
-      });
+    if (!result || !result.user) {
+      return res.status(400).json({ error: 'Erro ao criar conta de autenticação' });
     }
 
-    // Hash da senha
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    // Cria restaurante com horários
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        cnpj: data.cnpj,
-        name: data.name,
-        email: data.email,
-        password: hashedPassword,
-        phone: data.phone,
-        address: data.address,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        isApproved: false, // Aguarda validação
-        businessHours: {
-          create: data.businessHours
+    // 2. Criar perfil do restaurante vinculado ao User
+    try {
+      const restaurant = await prisma.restaurant.create({
+        data: {
+          userId: result.user.id,
+          cnpj: data.cnpj,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          address: data.address,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          isApproved: false,
+          businessHours: {
+            create: data.businessHours
+          }
+        },
+        include: {
+          businessHours: true
         }
-      },
-      include: {
-        businessHours: true
-      }
-    });
+      });
 
-    // Remove senha da resposta
-    const { password, ...restaurantWithoutPassword } = restaurant;
+      res.status(201).json({
+        message: 'Restaurante cadastrado com sucesso. Aguardando aprovação administrativa.',
+        restaurant,
+        session: 'session' in result ? result.session : null
+      });
 
-    res.status(201).json({
-      message: 'Restaurante cadastrado com sucesso. Aguardando aprovação.',
-      restaurant: restaurantWithoutPassword
-    });
+    } catch (profileError) {
+      console.error('Erro ao criar perfil de restaurante:', profileError);
+      return res.status(500).json({
+        error: 'Conta criada, mas erro ao configurar perfil. Entre em contato com o suporte.',
+        userId: result.user.id
+      });
+    }
 
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -89,63 +85,13 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
   }
 };
 
-// Login
-export const login = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { email, password } = loginSchema.parse(req.body);
-
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { email },
-      include: { businessHours: true }
-    });
-
-    if (!restaurant) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
-    }
-
-    if (!restaurant.isApproved) {
-      return res.status(403).json({ error: 'Cadastro aguardando aprovação' });
-    }
-
-    if (!restaurant.isActive) {
-      return res.status(403).json({ error: 'Conta desativada' });
-    }
-
-    const isValidPassword = await bcrypt.compare(password, restaurant.password);
-
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
-    }
-
-    // Gera token JWT
-    const token = jwt.sign(
-      { id: restaurant.id, type: 'restaurant' },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
-    );
-
-    const { password: _, ...restaurantWithoutPassword } = restaurant;
-
-    res.json({
-      token,
-      restaurant: restaurantWithoutPassword
-    });
-
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ errors: error});
-    }
-    next(error);
-  }
-};
-
 // Obter perfil do restaurante
 export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
 
     const restaurant = await prisma.restaurant.findUnique({
-      where: { id: restaurantId },
+      where: { userId: user.id },
       include: {
         businessHours: true,
         offers: {
@@ -163,9 +109,7 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
       return res.status(404).json({ error: 'Restaurante não encontrado' });
     }
 
-    const { password, ...restaurantWithoutPassword } = restaurant;
-
-    res.json(restaurantWithoutPassword);
+    res.json(restaurant);
 
   } catch (error) {
     next(error);
@@ -175,7 +119,7 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
 // Atualizar perfil
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
     const { name, phone, address, latitude, longitude, businessHours } = req.body;
 
     const updateData: any = {};
@@ -186,7 +130,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     if (longitude) updateData.longitude = longitude;
 
     const restaurant = await prisma.restaurant.update({
-      where: { id: restaurantId },
+      where: { userId: user.id },
       data: updateData,
       include: { businessHours: true }
     });
@@ -194,20 +138,18 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     // Atualiza horários se fornecido
     if (businessHours && Array.isArray(businessHours)) {
       await prisma.businessHours.deleteMany({
-        where: { restaurantId }
+        where: { restaurantId: restaurant.id }
       });
 
       await prisma.businessHours.createMany({
         data: businessHours.map((bh: any) => ({
           ...bh,
-          restaurantId
+          restaurantId: restaurant.id
         }))
       });
     }
 
-    const { password, ...restaurantWithoutPassword } = restaurant;
-
-    res.json(restaurantWithoutPassword);
+    res.json(restaurant);
 
   } catch (error) {
     next(error);
@@ -217,9 +159,18 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
 // RF-12: Histórico de vendas
 export const getSalesHistory = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
     const { startDate, endDate, status } = req.query;
 
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({ error: 'Restaurante não encontrado' });
+    }
+
+    const restaurantId = restaurant.id;
     const where: any = { restaurantId };
 
     if (startDate && endDate) {
@@ -234,7 +185,7 @@ export const getSalesHistory = async (req: Request, res: Response, next: NextFun
     }
 
     const orders = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         DATE(o."createdAt") as date,
         COUNT(*)::int as total_orders,
         SUM(o."totalAmount")::float as revenue,
@@ -277,7 +228,6 @@ export const getSalesHistory = async (req: Request, res: Response, next: NextFun
 
 export default {
   register,
-  login,
   getProfile,
   updateProfile,
   getSalesHistory

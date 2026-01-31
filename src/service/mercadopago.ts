@@ -1,5 +1,6 @@
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
-import prisma from '../utils/prisma';
+import orderService from './order.service.js';
+
 
 // Inicializar cliente do Mercado Pago
 const client = new MercadoPagoConfig({
@@ -65,7 +66,6 @@ export async function createPixPayment(params: CreatePixPaymentParams) {
 
 export async function getPaymentStatus(paymentId: string | number) {
     try {
-        // Garantir que paymentId seja string para o SDK
         const id = paymentId.toString();
         const paymentData = await payment.get({ id });
 
@@ -82,16 +82,13 @@ export async function getPaymentStatus(paymentId: string | number) {
     }
 }
 
-// ==================== REEMBOLSO (CORRIGIDO PARA V2) ====================
+// ==================== REEMBOLSO ====================
 
 export async function refundPayment(paymentId: string | number, amount?: number) {
     try {
-        // Na V2, o reembolso é disparado pelo método capture ou por um objeto separado, 
-        // mas a forma mais comum é usar o payment.capture ou chamar o endpoint de refund.
-        // O SDK V2 simplificou para:
         const id = paymentId.toString();
 
-        // @ts-ignore - Algumas versões do SDK V2 ainda estão estabilizando os tipos de refund
+        // @ts-ignore
         const refundData = await payment.refund({
             payment_id: id,
             body: amount ? { amount } : {}
@@ -105,46 +102,6 @@ export async function refundPayment(paymentId: string | number, amount?: number)
     } catch (error: any) {
         console.error('Erro reembolso:', error);
         return { success: false, error: error.message };
-    }
-}
-
-// ==================== ATUALIZAR STATUS DO PEDIDO ====================
-
-async function updateOrderPaymentStatus(orderId: string, mpStatus: string | undefined, paymentId: string | number) {
-    try {
-        const status = mpStatus || 'pending';
-
-        const statusMap: Record<string, { paymentStatus: string; orderStatus: string }> = {
-            'approved': { paymentStatus: 'APPROVED', orderStatus: 'CONFIRMED' },
-            'pending': { paymentStatus: 'PENDING', orderStatus: 'PENDING_PAYMENT' },
-            'rejected': { paymentStatus: 'REFUSED', orderStatus: 'CANCELLED' },
-            'cancelled': { paymentStatus: 'REFUNDED', orderStatus: 'CANCELLED' },
-            'refunded': { paymentStatus: 'REFUNDED', orderStatus: 'CANCELLED' }
-        };
-
-        const mapped =
-            status && status in statusMap
-                ? statusMap[status as keyof typeof statusMap]
-                : statusMap.pending;
-
-        // const orderUpdated = await prisma.order.update({
-        //     where: { id: orderId },
-        //     data: {
-        //         paymentStatus: mapped.paymentStatus as any,
-        //         status: mapped.orderStatus as any,
-        //         paymentId: paymentId.toString()
-        //     }
-        // });
-
-        // Lógica de notificações (idêntica à sua)
-        if (status === 'approved') {
-            // ... criar notificações e transação
-        }
-
-        return { success: true };
-    } catch (error) {
-        console.error('Erro update status:', error);
-        throw error;
     }
 }
 
@@ -194,16 +151,19 @@ export async function processWebhook(data: any) {
 
     if (type === 'payment') {
       const paymentId = webhookData.id;
-      
-      // Consultar o pagamento para obter status atualizado
       const paymentInfo = await getPaymentStatus(paymentId);
 
       if (paymentInfo.success && paymentInfo.metadata) {
         const orderId = paymentInfo.metadata.order_id;
 
-        // Chama a função de atualização que corrigimos antes
-        await updateOrderPaymentStatus(orderId, paymentInfo.status, paymentId);
+        if (paymentInfo.approved) {
+           await orderService.processPaymentApproval(orderId, paymentId.toString());
+        } else if (paymentInfo.status === 'rejected' || paymentInfo.status === 'cancelled') {
+            // Lógica para marcar como falha se necessário
+            console.log(`Pagamento ${paymentId} para pedido ${orderId} falhou: ${paymentInfo.status}`);
+        }
       }
+
     }
 
     return { success: true };

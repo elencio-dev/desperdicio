@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
-import prisma from '../utils/prisma';
+import prisma from '../utils/prisma.js';
 
 
 // Validação
@@ -19,12 +19,27 @@ const createOfferSchema = z.object({
 // RF-03: Criar oferta
 export const createOffer = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
     const data = createOfferSchema.parse(req.body);
+
+    // Buscar restaurante vinculado ao usuário autenticado
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!restaurant) {
+      return res.status(403).json({ error: 'Perfil de restaurante não encontrado' });
+    }
+
+    if (!restaurant.isApproved) {
+      return res.status(403).json({ error: 'Restaurante não aprovado' });
+    }
+
+    const restaurantId = restaurant.id;
 
     // RN-04: Validar desconto mínimo de 30%
     const discountPercent = ((data.originalPrice - data.promotionalPrice) / data.originalPrice) * 100;
-    
+
     if (discountPercent < 30) {
       return res.status(400).json({
         error: 'Desconto mínimo obrigatório de 30%'
@@ -39,17 +54,6 @@ export const createOffer = async (req: Request, res: Response, next: NextFunctio
     if (hoursDiff < 1 || hoursDiff > 3) {
       return res.status(400).json({
         error: 'Janela de retirada deve ter entre 1 e 3 horas'
-      });
-    }
-
-    // Verificar se restaurante está aprovado
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: restaurantId }
-    });
-
-    if (!restaurant?.isApproved) {
-      return res.status(403).json({
-        error: 'Restaurante não aprovado'
       });
     }
 
@@ -96,9 +100,9 @@ export const createOffer = async (req: Request, res: Response, next: NextFunctio
 // RF-04 e RF-05: Listar ofertas com filtros
 export const listOffers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { 
-      latitude, 
-      longitude, 
+    const {
+      latitude,
+      longitude,
       maxDistance = 5, // km
       minPrice,
       maxPrice,
@@ -135,14 +139,14 @@ export const listOffers = async (req: Request, res: Response, next: NextFunction
 
       // Haversine formula em SQL
       offers = await prisma.$queryRaw`
-        SELECT 
+        SELECT
           o.*,
           (
             6371 * acos(
-              cos(radians(${lat})) * 
-              cos(radians(r.latitude)) * 
-              cos(radians(r.longitude) - radians(${lon})) + 
-              sin(radians(${lat})) * 
+              cos(radians(${lat})) *
+              cos(radians(r.latitude)) *
+              cos(radians(r.longitude) - radians(${lon})) +
+              sin(radians(${lat})) *
               sin(radians(r.latitude))
             )
           ) as distance,
@@ -165,10 +169,10 @@ export const listOffers = async (req: Request, res: Response, next: NextFunction
           ${isVegan === 'true' ? prisma.$queryRawUnsafe(`AND o."isVegan" = true`) : prisma.$queryRawUnsafe('')}
         HAVING (
           6371 * acos(
-            cos(radians(${lat})) * 
-            cos(radians(r.latitude)) * 
-            cos(radians(r.longitude) - radians(${lon})) + 
-            sin(radians(${lat})) * 
+            cos(radians(${lat})) *
+            cos(radians(r.latitude)) *
+            cos(radians(r.longitude) - radians(${lon})) +
+            sin(radians(${lat})) *
             sin(radians(r.latitude))
           )
         ) <= ${maxDist}
@@ -252,15 +256,24 @@ export const getOffer = async (req: Request, res: Response, next: NextFunction) 
 // Atualizar oferta
 export const updateOffer = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
     const { id } = req.params as { id: string };
     const { quantity, availableQuantity, status } = req.body;
+
+    // Buscar restaurante vinculado ao usuário
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!restaurant) {
+      return res.status(403).json({ error: 'Perfil de restaurante não encontrado' });
+    }
 
     // Verificar se a oferta pertence ao restaurante
     const offer = await prisma.offer.findFirst({
       where: {
         id,
-        restaurantId
+        restaurantId: restaurant.id
       }
     });
 
@@ -288,11 +301,20 @@ export const updateOffer = async (req: Request, res: Response, next: NextFunctio
 // Cancelar oferta
 export const cancelOffer = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
     const { id } = req.params as { id: string };
 
+    // Buscar restaurante vinculado ao usuário
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!restaurant) {
+      return res.status(403).json({ error: 'Perfil de restaurante não encontrado' });
+    }
+
     const offer = await prisma.offer.findFirst({
-      where: { id, restaurantId }
+      where: { id, restaurantId: restaurant.id }
     });
 
     if (!offer) {
@@ -313,11 +335,11 @@ export const cancelOffer = async (req: Request, res: Response, next: NextFunctio
       data: { status: 'CANCELLED' }
     });
 
-    // Processar reembolsos (aqui você integraria com gateway)
+    // Processar reembolsos
     for (const order of affectedOrders) {
       await prisma.order.update({
         where: { id: order.id },
-        data: { 
+        data: {
           status: 'CANCELLED',
           paymentStatus: 'REFUNDED'
         }

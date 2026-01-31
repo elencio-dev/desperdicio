@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import orderController from '../controllers/order.controller';
-import { authenticate, isRestaurant, isConsumer } from '../middleware/auth.middleware';
+import orderController from '../controllers/order.controller.js';
+import { authenticate, isConsumer, isRestaurant } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
 // Rotas do consumidor
 router.post('/', authenticate, isConsumer, orderController.createOrder);
 router.get('/my-orders', authenticate, isConsumer, orderController.getConsumerOrders);
-router.delete('/:id', authenticate, isConsumer, orderController.cancelOrder);
+router.post('/:id/cancel', authenticate, isConsumer, orderController.cancelOrder);
 
 // Rotas do restaurante
 router.post('/validate-pickup', authenticate, isRestaurant, orderController.validatePickupCode);

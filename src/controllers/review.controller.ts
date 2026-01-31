@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
-import prisma from '../utils/prisma';
+import prisma from '../utils/prisma.js';
 
 const createReviewSchema = z.object({
   orderId: z.string().uuid(),
@@ -11,8 +11,19 @@ const createReviewSchema = z.object({
 // RF-09: Criar avaliação
 export const createReview = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const consumerId = (req as any).user.id;
+    const user = (req as any).user;
     const data = createReviewSchema.parse(req.body);
+
+    // Buscar consumidor vinculado ao usuário
+    const consumer = await prisma.consumer.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!consumer) {
+      return res.status(403).json({ error: 'Perfil de consumidor não encontrado' });
+    }
+
+    const consumerId = consumer.id;
 
     // Verificar se o pedido pertence ao consumidor e está concluído
     const order = await prisma.order.findFirst({
@@ -27,14 +38,14 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
     });
 
     if (!order) {
-      return res.status(404).json({ 
-        error: 'Pedido não encontrado ou não está concluído' 
+      return res.status(404).json({
+        error: 'Pedido não encontrado ou não está concluído'
       });
     }
 
     if (order.review) {
-      return res.status(400).json({ 
-        error: 'Pedido já foi avaliado' 
+      return res.status(400).json({
+        error: 'Pedido já foi avaliado'
       });
     }
 
@@ -64,20 +75,6 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
         totalRatings
       }
     });
-
-    // Verificar se restaurante precisa de revisão (média < 3.0 após 10 vendas)
-    if (totalRatings >= 10 && averageRating < 3.0) {
-      await prisma.notification.create({
-        data: {
-          userId: order.restaurantId,
-          userType: 'restaurant',
-          type: 'ORDER_CANCELLED', // Usar como alerta geral
-          title: 'Atenção: Avaliação Baixa',
-          message: `Sua avaliação média está em ${averageRating.toFixed(1)}. Seu cadastro entrará em revisão.`,
-          relatedId: order.restaurantId
-        }
-      });
-    }
 
     res.status(201).json(review);
 
@@ -143,10 +140,18 @@ export const getRestaurantReviews = async (req: Request, res: Response, next: Ne
 // Obter minhas avaliações
 export const getMyReviews = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const consumerId = (req as any).user.id;
+    const user = (req as any).user;
+
+    const consumer = await prisma.consumer.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!consumer) {
+      return res.status(403).json({ error: 'Perfil de consumidor não encontrado' });
+    }
 
     const reviews = await prisma.review.findMany({
-      where: { consumerId },
+      where: { consumerId: consumer.id },
       include: {
         order: {
           include: {

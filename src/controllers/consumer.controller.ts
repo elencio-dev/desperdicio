@@ -1,9 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
-import prisma from '../utils/prisma';
+import { auth } from '../utils/auth.js';
+import prisma from '../utils/prisma.js';
 
 const registerSchema = z.object({
   name: z.string().min(3),
@@ -12,84 +10,48 @@ const registerSchema = z.object({
   phone: z.string().optional()
 });
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string()
-});
-
 // RF-02: Cadastro de consumidor
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = registerSchema.parse(req.body);
 
-    const existingConsumer = await prisma.consumer.findUnique({
-      where: { email: data.email }
-    });
-
-    if (existingConsumer) {
-      return res.status(400).json({ error: 'E-mail já cadastrado' });
-    }
-
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    const consumer = await prisma.consumer.create({
-      data: {
-        name: data.name,
+    // 1. Better Auth: Criar Usuário
+    const result = await auth.api.signUpEmail({
+      body: {
         email: data.email,
-        password: hashedPassword,
-        phone: data.phone
+        password: data.password,
+        name: data.name,
+        role: 'CONSUMER'
       }
     });
 
-    const { password, ...consumerWithoutPassword } = consumer;
-
-    res.status(201).json({
-      message: 'Cadastro realizado com sucesso',
-      consumer: consumerWithoutPassword
-    });
-
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ errors: error });
-    }
-    next(error);
-  }
-};
-
-export const login = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { email, password } = loginSchema.parse(req.body);
-
-    const consumer = await prisma.consumer.findUnique({
-      where: { email }
-    });
-
-    if (!consumer) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+    if (!result || !result.user) {
+      return res.status(400).json({ error: 'Erro ao criar conta de autenticação' });
     }
 
-    if (!consumer.isActive) {
-      return res.status(403).json({ error: 'Conta desativada' });
+    // 2. Criar perfil do consumidor vinculado ao User
+    try {
+      const consumer = await prisma.consumer.create({
+        data: {
+          userId: result.user.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone
+        }
+      });
+
+      res.status(201).json({
+        message: 'Cadastro realizado com sucesso',
+        consumer,
+        session: 'session' in result ? result.session : null
+      });
+    } catch (profileError) {
+      console.error('Erro ao criar perfil de consumidor:', profileError);
+      return res.status(500).json({
+        error: 'Conta criada, mas erro ao configurar perfil. Entre em contato com o suporte.',
+        userId: result.user.id
+      });
     }
-
-    const isValidPassword = await bcrypt.compare(password, consumer.password);
-
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
-    }
-
-    const token = jwt.sign(
-      { id: consumer.id, type: 'consumer' },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
-    );
-
-    const { password: _, ...consumerWithoutPassword } = consumer;
-
-    res.json({
-      token,
-      consumer: consumerWithoutPassword
-    });
 
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -101,19 +63,17 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
 export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const consumerId = (req as any).user.id;
+    const user = (req as any).user;
 
     const consumer = await prisma.consumer.findUnique({
-      where: { id: consumerId }
+      where: { userId: user.id }
     });
 
     if (!consumer) {
       return res.status(404).json({ error: 'Consumidor não encontrado' });
     }
 
-    const { password, ...consumerWithoutPassword } = consumer;
-
-    res.json(consumerWithoutPassword);
+    res.json(consumer);
 
   } catch (error) {
     next(error);
@@ -122,7 +82,7 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
 
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const consumerId = (req as any).user.id;
+    const user = (req as any).user;
     const { name, phone } = req.body;
 
     const updateData: any = {};
@@ -130,13 +90,11 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     if (phone) updateData.phone = phone;
 
     const consumer = await prisma.consumer.update({
-      where: { id: consumerId },
+      where: { userId: user.id },
       data: updateData
     });
 
-    const { password, ...consumerWithoutPassword } = consumer;
-
-    res.json(consumerWithoutPassword);
+    res.json(consumer);
 
   } catch (error) {
     next(error);
@@ -145,7 +103,6 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
 
 export default {
   register,
-  login,
   getProfile,
   updateProfile
 };
