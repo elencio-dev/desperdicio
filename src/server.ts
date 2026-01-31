@@ -42,6 +42,23 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root route - Server Status
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Food Surplus API',
+    description: 'Backend MVP - SaaS de Venda de Excedentes de Comida',
+    version: '1.0.0',
+    status: 'online',
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      docs: '/api-docs'
+    }
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
