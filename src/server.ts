@@ -89,17 +89,17 @@ app.use((req, res, next) => {
 });
 
 // Auth Route (Better Auth)
-app.use("api/auth", toNodeHandler(auth));
+app.use("/api/auth", toNodeHandler(auth));
 
 // Routes
-app.use('api/restaurants', restaurantRoutes);
-app.use('api/consumers', consumerRoutes);
-app.use('api/offers', offerRoutes);
-app.use('api/orders', orderRoutes);
-app.use('api/reviews', reviewRoutes);
-app.use('api/notifications', notificationRoutes);
-app.use('api/webhooks', webhookRoutes);
-app.use('api/admin', adminRoutes);
+app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/consumers', consumerRoutes);
+app.use('/api/offers', offerRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/admin', adminRoutes);
 
 
 // Error handling
