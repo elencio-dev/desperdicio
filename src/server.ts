@@ -49,7 +49,7 @@ app.use(express.urlencoded({ extended: true }));
 // Root route - Server Status
 app.get('/', (req, res) => {
   res.json({
-    name: 'Food Surplus API',
+    name: 'Disperdicio',
     description: 'Backend MVP - SaaS de Venda de Excedentes de Comida',
     version: '1.0.0',
     status: 'online',
@@ -70,7 +70,7 @@ app.get('/health', (req, res) => {
 
 // Swagger Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customSiteTitle: 'Food Surplus API Docs',
+  customSiteTitle: 'Disperdicio API Docs',
   customCss: '.swagger-ui .topbar { display: none }',
 }));
 
