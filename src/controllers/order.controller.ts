@@ -17,8 +17,12 @@ const createOrderSchema = z.object({
 // RF-04: Criar pedido (compra)
 export const createOrder = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    console.log('🔵 [ORDER] Iniciando criação de pedido');
     const user = (req as any).user;
+    console.log('🔵 [ORDER] User ID:', user.id);
+
     const data = createOrderSchema.parse(req.body);
+    console.log('🔵 [ORDER] Dados validados:', { offerId: data.offerId, quantity: data.quantity, paymentMethod: data.paymentMethod });
 
     // Buscar consumidor vinculado ao usuário
     const consumer = await prisma.consumer.findUnique({
@@ -26,13 +30,16 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (!consumer) {
+      console.log('❌ [ORDER] Consumidor não encontrado para userId:', user.id);
       return res.status(403).json({ error: 'Perfil de consumidor não encontrado' });
     }
 
+    console.log('🔵 [ORDER] Consumidor encontrado:', consumer.id);
     const consumerId = consumer.id;
 
     // Verificar consumidor bloqueado (RN-07)
     if (consumer.blockedUntil && consumer.blockedUntil > new Date()) {
+      console.log('❌ [ORDER] Consumidor bloqueado até:', consumer.blockedUntil);
       return res.status(403).json({
         error: `Você está bloqueado até ${consumer.blockedUntil.toLocaleDateString()}`,
         reason: 'Três ausências consecutivas na retirada'
@@ -46,14 +53,24 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (!offer) {
+      console.log('❌ [ORDER] Oferta não encontrada:', data.offerId);
       return res.status(404).json({ error: 'Oferta não encontrada' });
     }
 
+    console.log('🔵 [ORDER] Oferta encontrada:', {
+      id: offer.id,
+      status: offer.status,
+      available: offer.availableQuantity,
+      pickupEnd: offer.pickupEndTime
+    });
+
     if (offer.status !== 'ACTIVE') {
+      console.log('❌ [ORDER] Oferta não está ACTIVE:', offer.status);
       return res.status(400).json({ error: 'Oferta não disponível' });
     }
 
     if (offer.availableQuantity < data.quantity) {
+      console.log('❌ [ORDER] Quantidade insuficiente. Disponível:', offer.availableQuantity, 'Solicitado:', data.quantity);
       return res.status(400).json({
         error: 'Quantidade insuficiente',
         available: offer.availableQuantity
@@ -62,6 +79,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     // RN-02: Verificar se não expirou
     if (offer.pickupEndTime < new Date()) {
+      console.log('❌ [ORDER] Oferta expirada:', offer.pickupEndTime);
       await prisma.offer.update({
         where: { id: data.offerId },
         data: { status: 'EXPIRED' }
@@ -74,13 +92,17 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const platformFee = totalAmount * 0.10;
     const restaurantAmount = totalAmount - platformFee;
 
+    console.log('🔵 [ORDER] Valores calculados:', { totalAmount, platformFee, restaurantAmount });
+
     // Gerar código de retirada (RF-07)
     const pickupCode = nanoid(10).toUpperCase();
+    console.log('🔵 [ORDER] Código de retirada gerado:', pickupCode);
 
     // Gerar QR Code
     const qrCodeUrl = await QRCode.toDataURL(pickupCode);
 
     // Criar pedido
+    console.log('🔵 [ORDER] Iniciando transação do banco de dados...');
     const order = await prisma.$transaction(async (tx) => {
       // Criar order
       const newOrder = await tx.order.create({
@@ -121,6 +143,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         }
       });
 
+      console.log('🔵 [ORDER] Pedido criado no banco:', newOrder.id);
+
       // RF-11: Atualizar quantidade disponível
       await tx.offer.update({
         where: { id: data.offerId },
@@ -130,6 +154,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           }
         }
       });
+
+      console.log('🔵 [ORDER] Quantidade da oferta atualizada');
 
       // Verificar se esgotou
       const updatedOffer = await tx.offer.findUnique({
@@ -141,15 +167,19 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           where: { id: data.offerId },
           data: { status: 'SOLD_OUT' }
         });
+        console.log('🔵 [ORDER] Oferta marcada como SOLD_OUT');
       }
 
       return newOrder;
     });
 
+    console.log('✅ [ORDER] Transação concluída com sucesso');
+
     // INTEGRAÇÃO REAL COM MERCADO PAGO
     let paymentResponse;
 
     if (data.paymentMethod === 'PIX') {
+      console.log('🔵 [ORDER] Gerando pagamento PIX via Mercado Pago...');
       paymentResponse = await mercadoPagoService.createPixPayment({
         orderId: order.id,
         amount: order.totalAmount,
@@ -159,6 +189,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       });
 
       if (paymentResponse.success) {
+        console.log('✅ [ORDER] PIX gerado com sucesso. Payment ID:', paymentResponse.paymentId);
         // Atualizar pedido com ID do pagamento e QR Code real
         await prisma.order.update({
           where: { id: order.id },
@@ -167,9 +198,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             qrCodeUrl: paymentResponse.qrCodeBase64
           }
         });
+      } else {
+        console.log('❌ [ORDER] Falha ao gerar PIX:', paymentResponse.error);
       }
     } else {
       // CREDIT_CARD ou DEBIT_CARD -> Gerar Preference para Checkout Pro
+      console.log('🔵 [ORDER] Gerando Checkout Pro para cartão...');
       paymentResponse = await mercadoPagoService.createCheckoutPreference(
         order.id,
         [{
@@ -182,16 +216,23 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           name: (order.consumer as any).name
         }
       );
+
+      if (paymentResponse.success) {
+        console.log('✅ [ORDER] Checkout Pro gerado. Preference ID:', paymentResponse.preferenceId);
+      } else {
+        console.log('❌ [ORDER] Falha ao gerar Checkout Pro:', paymentResponse.error);
+      }
     }
 
     if (!paymentResponse.success) {
-      console.error('❌ Erro no Mercado Pago:', paymentResponse.error);
+      console.error('❌ [ORDER] Erro no Mercado Pago:', paymentResponse.error);
       return res.status(500).json({
         error: 'Erro ao gerar pagamento',
         details: paymentResponse.error
       });
     }
 
+    console.log('✅ [ORDER] Pedido criado com sucesso:', order.id);
     res.status(201).json({
       order: {
         ...order,
